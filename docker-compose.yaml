@@ -1,0 +1,99 @@
+version: '3.8'
+volumes:
+  app1:
+  app2:
+  app3:
+  maria:
+  django: 
+  mosquitto_data:
+  mosquitto_log:
+
+services:
+    # Sensor 1
+
+  
+  
+ # MQTT Broker (e.g., Eclipse Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:latest
+    container_name: mqtt-broker
+    ports:
+      - 1883:1883
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - mynet  # Database (MySQL)
+  
+  db:
+    image: mariadb:latest
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: 2023
+      MYSQL_DATABASE: django
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 2023
+    volumes:
+      - maria:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - mynet
+
+  # Redis
+  redis:
+    image: redis:latest
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    networks:
+      - mynet
+
+  
+  sensor1:
+    build:
+      context: ./sensor1
+      dockerfile: Dockerfile
+    container_name: sensor1
+    command: >
+      sh -c "sleep 30 && python sensor.py"
+    environment:
+      BROKER: mqtt  # Example environment variable
+    depends_on:
+      - mqtt
+    networks:
+      - mynet
+
+  webserver:
+    build:
+      context: ./mysite
+      dockerfile: ./Dockerfile
+    depends_on:
+      - mqtt
+      - redis
+      - db
+    container_name: django-web-server
+    command: >
+            sh -c "sleep 5 &&./start_servers.sh"
+    ports:
+      - "8000:8000"
+    volumes:
+      - django:/app
+    networks:
+      - mynet
+    environment:
+      - DJANGO_DB_HOST=db
+      - DJANGO_DB_NAME=django
+      - DJANGO_DB_USER=root
+      - DJANGO_DB_PASSWORD=2023
+      - DJANGO_DB_PORT=3306
+      - MQTT_BROKER_HOST=broker.emqx.io
+      - MQTT_BROKER_PORT=1883
+      - MQTT_CENTRAL_TOPIC=connect
+
+networks:
+  mynet:
+    driver: bridge
+
+
